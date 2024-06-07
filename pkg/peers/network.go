@@ -8,7 +8,7 @@ import (
 )
 
 type Network struct {
-	nodes       map[string]*Node
+	Nodes       map[string]*Node
 	nodes_count int
 }
 
@@ -16,16 +16,17 @@ type Network struct {
 func NewNetwork(ncount int, isStar bool) Network {
 
 	nodes := make(map[string]*Node)
+	network := Network{
+		Nodes:       nodes,
+		nodes_count: ncount,
+	}
+
 	for i := 0; i < ncount; i++ {
 		addr := strconv.Itoa(i)
-		node := NewNode(addr)
+		node := NewNode(addr, &network)
 		nodes[addr] = &node
 	}
 
-	network := Network{
-		nodes:       nodes,
-		nodes_count: ncount,
-	}
 
     if isStar == false {
         return network
@@ -48,8 +49,8 @@ func NewNetwork(ncount int, isStar bool) Network {
  *        n1_outchan
  **/
 func (network *Network) AddChannel(node_id1, node_id2 string) {
-	node1 := network.nodes[node_id1]
-	node2 := network.nodes[node_id2]
+	node1 := network.Nodes[node_id1]
+	node2 := network.Nodes[node_id2]
 
 	n1_inchan := make(chan *Message, utils.CHANNEL_SIZE)
 	n1_outchan := make(chan *Message, utils.CHANNEL_SIZE)
@@ -63,7 +64,7 @@ func (network *Network) AddChannel(node_id1, node_id2 string) {
 
 //Prints nodes and channels in adjlist fashon
 func (network *Network) Print() {
-	for node_id, node := range network.nodes {
+	for node_id, node := range network.Nodes {
 		fmt.Printf("\nNode Id: %s\n", node_id)
         str := ""
 		for peer_id := range node.outChan {
