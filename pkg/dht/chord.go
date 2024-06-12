@@ -2,22 +2,12 @@ package dht
 
 import (
 	"crypto/sha1"
-	"math"
+	"strconv"
 
-	"github.com/BharadwajaD/p2pfs/pkg/peers"
+	"github.com/BharadwajaD/p2pfs/pkg/rpc_peers"
 )
 
-type Hash struct {
-	nbits uint8
-}
-
-func NewHash() Hash {
-	return Hash{
-		nbits: 32,
-	}
-}
-
-func (hash *Hash) hashKey(key string) uint32 {
+func hashKey(key string) uint32 {
 	h := sha1.New()
 	h.Write([]byte(key))
 	bs := h.Sum(nil)
@@ -33,36 +23,56 @@ func (hash *Hash) hashKey(key string) uint32 {
 // 2. successor node_id
 // 3. finger table
 type LocalDHT struct {
-	node    *peers.Node //for channel
-	hash    Hash
-	node_id string
-	SuccId  string
-	PredId  string //key hashes
+	node *rpc_peers.Node //for rpc calls
 
-	HashMap map[string]string
+	node_id int
+	succ_id int //node ids
+
+	HashTable map[string]string //local hash map
 
 	//TODO: finger table: {node_id + 2^(i-1), peer_id}
 }
 
-func NewLocalDHT(network *peers.Network, node_id string) LocalDHT {
-	return LocalDHT{
-		node:    network.Nodes[node_id],
-		node_id: node_id,
-		PredId:  "",
-		SuccId:  "",
-		HashMap: make(map[string]string),
-		hash:    NewHash(),
+func NewLocalDHT(node *rpc_peers.Node, node_id int) *LocalDHT {
+    ldht := LocalDHT{
+		node:      node,
+		node_id:   node_id,
+		succ_id:   -1,
+		HashTable: make(map[string]string),
 	}
+
+    node.RegisterName("LDHT", &ldht) //LDHT.(i) service is exported for rpc calls
+    return &ldht
 }
 
-func (ldht *LocalDHT) FindSuccessor(key string) string {
-	key_id := ldht.hash.hashKey(key)
-	node_hash := ldht.hash.hashKey(ldht.node_id)
-	succ_hash := ldht.hash.hashKey(ldht.SuccId)
+// rpc exported function
+// will return node_id of node containing the given key
+func (ldht *LocalDHT) FindSuccessor(key string, succ_id *int) error {
 
-	if key_id > node_hash && key_id <= succ_hash {
-		return ldht.SuccId
+
+	if ldht.succ_id == -1 {
+		//single node
+		*succ_id = ldht.node_id
+		return nil
 	}
 
-	return ldht.FindSuccessor(key)
+	key_id := hashKey(key)
+	node_hash := hashKey(strconv.Itoa(ldht.node_id))
+	succ_hash := hashKey(strconv.Itoa(ldht.succ_id))
+
+
+	if key_id > node_hash && key_id <= succ_hash {
+		*succ_id = ldht.succ_id
+		return nil
+	}
+
+	return ldht.node.Call(ldht.succ_id, "LDHT", "FindSuccessor", key, succ_id) //rpc call
+}
+
+// TODO: Join function
+// func (ldht *LocalDHT) Join(new_node_id int) error {}
+
+func (ldht *LocalDHT) Echo(msg string, reply *string) error {
+    *reply = msg
+    return nil
 }
